@@ -246,11 +246,14 @@ class ContactController extends CrudController
     public function actionConfirmEmail($id = null)
     {
         $confirmer = Yii::createObject(EmailConfirmer::class);
-        $confirmer->confirm();
+        try {
+            $confirmer->confirm();
+            $message = Yii::t('hipanel:client', 'Email was verified successfully');
+        } catch (\Exception $e) {
+            $error = Yii::t('hipanel:client', 'Email verification was failed.') ." " . Yii::t('hipanel', 'Reason') . ": " . Yii::t('hipanel:client', $e->getMessage());
+        }
 
-        $to = $id ? ['@contact/view', 'id' => $id] : ['/site/profile'];
-
-        return $this->redirect($to);
+        return $this->render('confirm', compact('success', 'error'));
     }
 
     private function getContactById($id)
