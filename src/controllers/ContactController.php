@@ -95,11 +95,16 @@ class ContactController extends CrudController
                 'class' => ViewAction::class,
                 'findOptions' => ['with_counters' => 1],
                 'on beforePerform' => function ($event) {
+                    if (!Yii::getAlias('@document', false)) {
+                        $this->redirect('/');
+                    }
+
                     /** @var ViewAction $action */
                     $action = $event->sender;
 
                     /** @var ContactQuery $query */
                     $query = $action->getDataProvider()->query;
+
                     $query->withDocuments()->withLocalizations();
                 },
             ],
