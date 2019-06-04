@@ -25,7 +25,7 @@ class ContactSearch extends Contact
     public function searchAttributes()
     {
         return ArrayHelper::merge($this->defaultSearchAttributes(), [
-            'limit',
+            'limit', 'requisites_only',
         ]);
     }
 }

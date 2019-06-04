@@ -94,6 +94,20 @@ class ContactController extends CrudController
         return array_merge(parent::actions(), [
             'index' => [
                 'class' => IndexAction::class,
+                'on beforePerform' => function ($event) {
+                    /** @var ViewAction $action */
+                    $action = $event->sender;
+
+                    /** @var ContactQuery $query */
+                    $query = $action->getDataProvider()->query;
+
+                    /** @var string $representation */
+                    $representation = $action->controller->indexPageUiOptionsModel->representation;
+
+                    if ($representation === 'requisites') {
+                        $query->andWhere(['requisites_only' => true]);
+                    }
+                },
             ],
             'search' => [
                 'class' => ComboSearchAction::class,
