@@ -75,7 +75,7 @@ class Contact extends \hipanel\base\Model
             [['invoice_last_no'], 'safe'],
 
             [['reg_data', 'vat_number', 'tax_comment', 'bank_details'], 'trim'],
-            [['bank_account', 'bank_name', 'bank_address', 'bank_swift'], 'trim'],
+            [['bank_account', 'bank_name', 'bank_address', 'bank_swift', 'bank_iban'], 'trim'],
             [['bank_correspondent', 'bank_correspondent_swift'], 'trim'],
             [['vat_number', 'tax_comment'], 'string'],
             [['vat_rate'], 'number', 'max' => 99],
@@ -260,6 +260,7 @@ class Contact extends \hipanel\base\Model
             'reg_data'          => Yii::t('hipanel:client', 'Registration data'),
             'vat_number'        => Yii::t('hipanel:client', 'VAT number'),
             'vat_rate'          => Yii::t('hipanel:client', 'VAT rate'),
+            'bank_iban'         => Yii::t('hipanel:client', 'IBAN'),
             'bank_account'      => Yii::t('hipanel:client', 'Bank account'),
             'bank_name'         => Yii::t('hipanel:client', 'Bank name'),
             'bank_address'      => Yii::t('hipanel:client', 'Bank address'),
@@ -348,6 +349,7 @@ class Contact extends \hipanel\base\Model
     public function renderBankDetails()
     {
         return implode("\n", array_filter([
+            $this->renderBankIban($this->bank_iban),
             $this->renderBankAccount($this->bank_account),
             $this->renderBankName($this->bank_name),
             $this->renderBankAddress($this->bank_address),
@@ -357,38 +359,39 @@ class Contact extends \hipanel\base\Model
         ]));
     }
 
-    public function renderBankAccount($iban)
+    public function renderBankIban(?string $iban): ?string
     {
-        if (empty($iban)) {
-            return null;
-        }
-
-        return strpos($iban, "\n")===false ? "IBAN: $iban" : $iban;
+        return !empty($iban) ? "IBAN: {$iban}" : null;
     }
 
-    public function renderBankName($name)
+    public function renderBankAccount(?string $account): ?string
     {
-        return $name ? "Bank Name: $name" : null;
+        return !empty($account) ? Yii::t('hipanel.contact.bank', "Bank Account: {account}",  ['account' => $account]) : null;
     }
 
-    public function renderBankAddress($address)
+    public function renderBankName(?string $name): ?string
     {
-        return $address ? 'Bank Address: ' . $address : null;
+        return !empty($name) ? Yii::t('hipanel.contact.bank', "Bank Name: {name}", ['name' => $name]) : null;
     }
 
-    public function renderBankSwift($swift)
+    public function renderBankAddress(?string $address): ?string
     {
-        return $swift ? 'SWIFT code: ' . $swift : null;
+        return !empty($address) ? Yii::t('hipanel.contact.bank', "Bank Address: {address}", ['address' => $address]) : null;
+    }
+
+    public function renderBankSwift(?string $swift): ?string
+    {
+        return !empty($swift) ? Yii::t('hipanel.contact.bank',"SWIFT/BIC: {swift}", ['swift' => $swift]) : null;
     }
 
     public function renderCorrespondentBank(string $name = null): ?string
     {
-        return $name ? 'Correspondent bank: ' . $name : null;
+        return !empty($name) ? Yii::t('hipanel.contact.bank', "Correspondent Bank Name: {name}", ['name' => $name]) : null;
     }
 
     public function renderCorrespondentBankSwift(string $swift = null): ?string
     {
-        return $swift ? 'Correspondent bank SWIFT: ' . $swift : null;
+        return !empty($swift) ? Yii::t('hipanel.contact.bank', "Correspondent Bank SWIFT: {swift}", ['swift' => $swift]) : null;
     }
 
     /**
