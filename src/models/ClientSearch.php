@@ -21,20 +21,38 @@ class ClientSearch extends Client
     const DEBT_LABEL_NEUTRAL = 'neutral';
 
     use SearchModelTrait {
-        searchAttributes as defaultSearchAttributes;
+        SearchModelTrait::searchAttributes as defaultSearchAttributes;
+    }
+
+    public static function tableName()
+    {
+        return Client::tableName();
     }
 
     public function searchAttributes()
     {
         return ArrayHelper::merge($this->defaultSearchAttributes(), [
-            'created_from', 'created_till', 'hide_deleted',
-            'types', 'states', 'login_email_like',
-            'profit_time_from', 'profit_time_till',
-            'profit_not_empty', 'hide_internal',
+            'login_email_in',
+            'created_from',
+            'created_till',
+            'hide_deleted',
+            'types',
+            'states',
+            'login_email_like',
+            'profit_time_from',
+            'profit_time_till',
+            'profit_not_empty',
+            'hide_internal',
+            'hide_prj',
             'debt_type',
-            'total_balance_gt', 'total_balance_lt', 'total_balance',
-            'balance_gt', 'balance_lt',
+            'total_balance_gt',
+            'total_balance_lt',
+            'total_balance',
+            'balance_gt',
+            'balance_lt',
             'only_with_note',
+            'tags',
+            'kyc_status',
         ]);
     }
 
@@ -42,11 +60,14 @@ class ClientSearch extends Client
     {
         return array_merge(parent::attributeLabels(), [
             'login_email_like' => Yii::t('hipanel:client', 'Login or Email'),
+            'login_email_in' => Yii::t('hipanel:client', 'Logins or E-Mails'),
             'profit_not_empty' => Yii::t('hipanel:client', 'Show not empty'),
             'client_id' => Yii::t('hipanel:client', 'Client'),
-            'hide_internal' => Yii::t('hipanel:client', 'Hide system'),
+            'hide_internal' => Yii::t('hipanel:client', 'Hide internal'),
+            'hide_prj' => Yii::t('hipanel:client', 'Hide PRJ'),
             'debt_type' => Yii::t('hipanel:client', 'Financial type'),
             'only_with_note' => Yii::t('hipanel:client', 'Only with note'),
+            'kyc_status' => Yii::t('hipanel:client', 'KYC status'),
         ]);
     }
 

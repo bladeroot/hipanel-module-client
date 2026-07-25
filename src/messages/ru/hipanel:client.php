@@ -11,8 +11,8 @@
 return [
     'Referer' => 'Реферер',
     'Partner' => 'Партнер',
-    'Enable two factor authorization' => 'Включить двухфакторную авторизацию',
-    'Disable two factor authorization' => 'Отключить двухфакторную авторизацию',
+    'Enable two-factor authorization' => 'Включить двухфакторную авторизацию',
+    'Disable two-factor authorization' => 'Отключить двухфакторную авторизацию',
     'change is not confirmed' => 'изменение не подтверждено',
     'Registered range' => 'Зарегистрирован в период',
     'Block clients' => 'Заблокировать клиентов',
@@ -217,7 +217,9 @@ return [
     'Bank account' => 'Расчётный счет',
     'Bank name' => 'Название банка',
     'Bank address' => 'Адрес банка',
-    'SWIFT code' => 'SWIFT',
+    'SWIFT code' => 'SWIFT-код',
+    'Correspondent bank' => 'Банк-корреспондент',
+    'Correspondent bank SWIFT code' => 'SWIFT-код банка-корреспондента',
     'Number' => 'Номер',
     'Date' => 'Дата',
     'Provided services (en)' => 'Предоставляемые услуги (en)',
@@ -285,6 +287,7 @@ return [
 
     'Inherited from seller\'s defaults' => 'Наследуется от настроек реселлера по умолчанию',
     'Login or Email' => 'Логин или Email',
+    'Logins or E-Mails' => 'Логины или E-Mail\'ы',
     'Code was sent successfully' => 'Код успешно отправлен',
 
     'Assignments' => 'Назначения',
@@ -321,6 +324,16 @@ return [
     'Delete by logins' => 'Массовое удаление по логину',
     'Logins' => 'Логины клиентов',
     'Delete clients' => 'Удалить клиентов',
-    'Hide system' => 'Скрыть системных',
+    'Hide internal' => 'Скрыть внутренних',
+    'Hide PRJ' => 'Скрыть PRJ',
     'Only with note' => 'Только с заметками',
+    'You could not edit your account. Operation is not permitted' => 'Вы не можете редактировать свой аккаунт. Операция не разрешена',
+
+    'Last invoice number (internal use only)' => 'Последний номер инвоиса (только для внутреннего использования)',
+    'Last payment request number (internal use only)' => 'Последний номер запроса на оплату (только для внутреннего использования)',
+    'Last service invoice number' => 'Последний номер инвоиса за услуги',
+    'Last purchase invoice number' => 'Последний номер инвоиса за товары',
+    'Last service payment request number' => 'Последний номер запроса на оплату услуг',
+    'Last purchase payment request number' => 'Последний номер запроса на оплату товаров',
+    'If you provide an organization name, it will be considered the domain holder and may be published in RDDS with your consent.' => 'Если вы укажете название организации, оно будет считаться владельцем домена и может быть опубликовано в RDDS с вашего согласия.',
 ];

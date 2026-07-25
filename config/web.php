@@ -16,6 +16,8 @@ return [
         '@client' => '/client/client',
         '@contact' => '/client/contact',
         '@article' => '/client/article',
+        '@blacklist' => '/client/blacklist',
+        '@whitelist' => '/client/whitelist',
         '@client/assignments' => '/client/assignments',
         '@client/debt' => '/debt/debt',
     ],
@@ -23,6 +25,7 @@ return [
         'client' => [
             'class' => \hipanel\modules\client\Module::class,
             'userCreationIsDisabled' => $params['module.client.user.creation.disabled'] ?? false,
+            'twoFactorAuth' => $params['module.client.twoFactorAuth'] ?? true,
         ],
         'language' => [
             'on ' . \hiqdev\yii2\language\events\LanguageWasChanged::EVENT_NAME =>
@@ -48,18 +51,6 @@ return [
     ],
     'container' => [
         'definitions' => [
-            \hipanel\modules\finance\helpers\ConsumptionConfigurator::class => [
-                'class' => \hipanel\modules\finance\helpers\ConsumptionConfigurator::class,
-                'configurations' => [
-                    'client' => [
-                        'label' => ['hipanel:finance', 'Client resources'],
-                        'columns' => ['referral'],
-                        'groups' => [],
-                        'model' => Client::class,
-                        'resourceModel' => ClientResource::class,
-                    ],
-                ]
-            ],
             \hipanel\modules\dashboard\menus\DashboardMenu::class => [
                 'add' => [
                     'client' => [

@@ -3,48 +3,67 @@
 use hipanel\modules\client\forms\EmployeeForm;
 use borales\extensions\phoneInput\PhoneInput;
 use hipanel\modules\client\models\Contact;
+use hipanel\modules\client\widgets\BankDetailsFormWidget;
 use hipanel\modules\client\widgets\combo\ClientCombo;
 use hipanel\widgets\BackButton;
 use hipanel\widgets\Box;
 use hiqdev\combo\StaticCombo;
 use yii\helpers\Html;
+use yii\web\View;
 use yii\widgets\ActiveForm;
 use yii\widgets\MaskedInput;
 
 /**
- * @var \yii\web\View
+ * @var View $this
  * @var array $countries
  * @var Contact $model the primary model
  * @var ActiveForm $form
  * @var EmployeeForm $employeeForm
  */
 
-$i = 0;
-$contract = $employeeForm->getContract();
 ?>
 
-<div class="row">
-    <div class="col-md-12">
-        <?php Box::begin(); ?>
-            <?= Html::submitButton(Yii::t('hipanel', 'Save'), ['class' => 'btn btn-success']); ?>
-            <?= BackButton::widget() ?>
-        <?php Box::end(); ?>
-        <?= Html::hiddenInput('pincode', null, ['id' => 'contact-pincode']) ?>
-    </div>
+<?= Html::hiddenInput('pincode', null, ['id' => 'contact-pincode']) ?>
+<?php if ($contract = $employeeForm->getContract()) : ?>
+    <div class="row">
+        <div class="col-md-12">
+            <?php $box = Box::begin(['renderBody' => false]) ?>
+            <?php $box->beginHeader() ?>
+            <?= $box->renderTitle(Yii::t('hipanel:client', 'Contract information')) ?>
+            <?php $box::endHeader() ?>
+            <?php $box->beginBody() ?>
 
+            <?= Html::activeHiddenInput($contract, 'sender_id', ['value' => $model->seller_id]) ?>
+            <?= Html::activeHiddenInput($contract, 'receiver_id', ['value' => $model->client_id]) ?>
+
+            <?php
+            foreach ($employeeForm->getContractFields() as $name => $label) {
+                if ($name === 'date') {
+                    $form->field($contract, "data[date]")->widget(MaskedInput::class, [
+                        'mask' => '99.99.9999',
+                    ])->label($label);
+                }
+                echo $form->field($contract, "data[$name]")->label($label);
+            }
+            ?>
+            <?php $box->endBody() ?>
+            <?php $box::end() ?>
+        </div>
+    </div>
+<?php endif ?>
+<div class="row">
+    <?php $i = 0; ?>
     <?php foreach ($employeeForm->getContacts() as $language => $model) : ?>
         <div class="col-md-6">
             <?php Box::begin([
                 'title' => Html::tag('span', $language, ['class' => 'label label-default']) . ' ' . Yii::t('hipanel:client', 'Contact details'),
             ]) ?>
-                <?php if ($model->scenario === 'update') : ?>
-                    <?= Html::activeHiddenInput($model, "[$i]id") ?>
-                    <?= Html::activeHiddenInput($model, "[$i]localization") ?>
+                <?php if ($model->isNewRecord) : ?>
+                    <?= $form->field($model, "[$i]client_id")->widget(ClientCombo::class, ['clientType' => 'employee']) ?>
                 <?php else: ?>
-                    <?= $form->field($model, 'client_id')->widget(ClientCombo::class, [
-                        'clientType' => 'employee',
-                    ]); ?>
+                    <?= Html::activeHiddenInput($model, "[$i]id") ?>
                 <?php endif; ?>
+                <?= Html::activeHiddenInput($model, "[$i]localization") ?>
                 <?= $form->field($model, "[$i]first_name"); ?>
                 <?= $form->field($model, "[$i]last_name"); ?>
                 <?= $form->field($model, "[$i]email"); ?>
@@ -67,43 +86,34 @@ $contract = $employeeForm->getContract();
                 ]) ?>
             <?php Box::end() ?>
 
-            <?php Box::begin(['title' => Yii::t('hipanel:client', 'Bank details')]) ?>
             <fieldset id="bank_info">
-                <?= $form->field($model, "[$i]vat_number") ?>
-                <?= $form->field($model, "[$i]bank_account") ?>
-                <?= $form->field($model, "[$i]bank_name") ?>
-                <?= $form->field($model, "[$i]bank_address") ?>
-                <?= $form->field($model, "[$i]bank_swift") ?>
+                <?= BankDetailsFormWidget::widget([
+                    'form' => $form,
+                    'parentModel' => $model,
+                    'controller' => $this->context,
+                ]) ?>
             </fieldset>
-            <?php Box::end() ?>
+            <?php if ($model->isMainContact()) : ?>
+                <?php Box::begin(['title' => Yii::t('hipanel:client', 'Registration data')]) ?>
+                <fieldset id="tax_info">
+                    <?= $form->field($model, "[$i]vat_number") ?>
+                    <?= $form->field($model, "[$i]vat_rate") ?>
+                    <?= $form->field($model, "[$i]registration_number") ?>
+                    <?= $form->field($model, "[$i]tic") ?>
+                </fieldset>
+                <?php Box::end() ?>
+            <?php endif ?>
         </div>
-    <?php $i++ ?>
-    <?php endforeach; ?>
+        <?php $i++ ?>
+    <?php endforeach ?>
 </div>
-<?php if ($contract) : ?>
-    <div class="row">
-        <div class="col-md-6">
-            <?php $box = Box::begin(['renderBody' => false]) ?>
-                <?php $box->beginHeader() ?>
-                    <?= $box->renderTitle(Yii::t('hipanel:client', 'Contract information')) ?>
-                <?php $box::endHeader() ?>
-                <?php $box->beginBody() ?>
 
-                    <?= Html::activeHiddenInput($contract, 'sender_id', ['value' => $model->seller_id]) ?>
-                    <?= Html::activeHiddenInput($contract, 'receiver_id', ['value' => $model->client_id]) ?>
+<div class="row">
 
-                    <?php
-                        foreach ($employeeForm->getContractFields() as $name => $label) {
-                            if ($name === 'date') {
-                                $form->field($contract, "data[date]")->widget(MaskedInput::class, [
-                                        'mask' => '99.99.9999',
-                                    ])->label($label);
-                            }
-                            echo $form->field($contract, "data[$name]")->label($label);
-                        }
-                    ?>
-                <?php $box->endBody() ?>
-            <?php $box::end(); ?>
-        </div>
+    <div class="col-md-12 md-mb-20">
+        <?= Html::submitButton(Yii::t('hipanel', 'Save'), ['class' => 'btn btn-success']) ?>
+        &nbsp;
+        <?= BackButton::widget() ?>
     </div>
-<?php endif; ?>
+
+</div>

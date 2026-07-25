@@ -10,7 +10,9 @@
 
 namespace hipanel\modules\client\models;
 
+use hipanel\behaviors\TaggableBehavior;
 use hipanel\behaviors\CustomAttributes;
+use hipanel\models\TaggableInterface;
 use hipanel\modules\stock\helpers\ProfitColumns;
 use yii\helpers\ArrayHelper;
 use hipanel\helpers\StringHelper;
@@ -28,13 +30,15 @@ use Yii;
  * @property Contact $contact the primary contact
  * @property Purse[] $purses
  * @property int $id
+ * @property-read ?array $count
  * @property-read string $balance
  * @property-read string $credit
  * @property-read string $currency
  * @property-read ClientWithProfit[] $profit
  * @property-read Assignment[] $assignments
+ * @property mixed|null $type
  */
-class Client extends \hipanel\base\Model
+class Client extends \hipanel\base\Model implements TaggableInterface
 {
     use \hipanel\base\ModelTrait;
 
@@ -57,13 +61,16 @@ class Client extends \hipanel\base\Model
     {
         return array_merge(parent::behaviors(), [
             'as customAttributes' => CustomAttributes::class,
+            [
+                'class' => TaggableBehavior::class,
+            ],
         ]);
     }
 
     public function rules()
     {
         return [
-            [['id', 'seller_id', 'state_id', 'type_id', 'tariff_id', 'profile_id', 'payment_ticket_id', 'referer_id'], 'integer'],
+            [['id', 'seller_id', 'state_id', 'type_id', 'tariff_id', 'profile_id', 'payment_ticket_id', 'referer_id', 'account_owner_id'], 'integer'],
             [['hipanel_forced'], 'boolean', 'trueValue' => 1],
             [['login', 'seller', 'state', 'type', 'tariff', 'profile', 'referer'], 'string'],
             [['state_label', 'type_label', 'referral', 'roles', 'debt_label'], 'safe'],
@@ -73,7 +80,7 @@ class Client extends \hipanel\base\Model
             [['id'], 'required', 'on' => ['update']],
             [['custom_attributes'], 'safe', 'on' => ['update']],
 
-            [['balance', 'credit', 'full_balance'], 'number'],
+            [['balance', 'credit', 'full_balance', 'template_id'], 'number'],
             [['count', 'confirm_url', 'language', 'comment', 'name', 'currency'], 'safe'],
             [['create_time', 'update_time', 'create_date'], 'date'],
             [['id', 'note'], 'safe', 'on' => 'set-note'],
@@ -253,6 +260,7 @@ class Client extends \hipanel\base\Model
             [['is_verified'], 'boolean', 'on' => ['set-verified']],
 
             [['currencies'], 'safe', 'on' => ['create', 'update']],
+            [['id'], 'safe', 'on' => ['create-notifications']],
         ];
     }
 
@@ -388,7 +396,7 @@ class Client extends \hipanel\base\Model
             return null;
         }
 
-        return $this->hasMany(Purse::class, ['client_id' => 'id']);
+        return $this->hasMany(Purse::class, ['client_id' => 'id'])->joinWith('documents');
     }
 
     public function getPurseByCurrency(string $currency): ?Purse
@@ -423,7 +431,7 @@ class Client extends \hipanel\base\Model
 
     public static function canBeSelf($model)
     {
-        return Yii::$app->user->is($model->id) || (!Yii::$app->user->can('resell') && Yii::$app->user->can('support') && Yii::$app->user->identity->seller_id === $model->id);
+        return Yii::$app->user->is($model->id) || (!Yii::$app->user->can('resell') && Yii::$app->user->can('access-subclients') && Yii::$app->user->identity->seller_id === $model->id);
     }
 
     public function isBlocked()
@@ -466,7 +474,7 @@ class Client extends \hipanel\base\Model
         $translation = [
             'q1' => Yii::t('hipanel:client', 'What was your nickname when you were a child?'),
             'q2' => Yii::t('hipanel:client', 'What was the name of your best childhood friend?'),
-            'q3' => Yii::t('hipanel:client', 'What is the month and the year of birth of your oldest relative? (e.g. January, 1900)'),
+            'q3' => Yii::t('hipanel:client', 'What are the month and the year of birth of your oldest relative? (e.g. January, 1900)'),
             'q4' => Yii::t('hipanel:client', 'What is your grandmother’s maiden name?'),
             'q5' => Yii::t('hipanel:client', 'What is the patronymic of your oldest relative?'),
         ];
@@ -521,7 +529,7 @@ class Client extends \hipanel\base\Model
      *
      * @return array
      */
-    public function getSortedPurses()
+    public function getSortedPurses(): array
     {
         $purses = $this->purses;
         if (empty($purses)) {
@@ -562,7 +570,27 @@ class Client extends \hipanel\base\Model
 
     public function notMyself(): bool
     {
-        return (string)$this->id !== (string)Yii::$app->user->identity->id;
+        return !$this->isSameAsIdentity();
+    }
+
+    public function isSameAsIdentity(): bool
+    {
+        return (string)$this->id === (string)Yii::$app->user->identity->id;
+    }
+
+    public function notMySeller(): bool
+    {
+        return (string)$this->id !== (string)Yii::$app->user->identity->seller_id;
+    }
+
+    public function isAccountOwner(): bool
+    {
+        return (string) $this->id === (string) $this->account_owner_id;
+    }
+
+    public function isEmployee(): bool
+    {
+        return $this->type === self::TYPE_EMPLOYEE;
     }
 
     public function getCustomAttributesList()
@@ -580,5 +608,28 @@ class Client extends \hipanel\base\Model
             'acdn' => Yii::t('hipanel:client', 'aCDN'),
             'other_information_links' => Yii::t('hipanel:client', 'Other information/Links'),
         ];
+    }
+
+    /**
+     * @param string $relation
+     * @return int
+     */
+    public function getCountOf(string $relation): int
+    {
+        if (!in_array($relation, ['tickets', 'servers', 'contacts'], true)) {
+            throw new \InvalidArgumentException(sprintf('Unsupported relation: %s', $relation));
+        }
+
+        return (int)(($this->count ?? [])[$relation] ?? 0);
+    }
+
+    public function getServerCount(): int
+    {
+        return $this->getCountOf('servers');
+    }
+
+    public function hasServers(): bool
+    {
+        return $this->getServerCount() > 0;
     }
 }

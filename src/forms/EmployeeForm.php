@@ -10,6 +10,7 @@
 
 namespace hipanel\modules\client\forms;
 
+use hipanel\modules\client\actions\BankDetailsLoaderTrait;
 use hipanel\modules\client\models\Contact;
 use hipanel\modules\document\models\Document;
 use hiqdev\hiart\Collection;
@@ -21,6 +22,9 @@ use Yii;
  */
 class EmployeeForm
 {
+    use BankDetailsLoaderTrait;
+
+    const DEFAULT_SCENARIO = 'update';
     /**
      * Default contact language.
      */
@@ -50,9 +54,9 @@ class EmployeeForm
 
     /**
      * @param Contact $contact
-     * @param $scenario
+     * @param string|null $scenario
      */
-    public function __construct(Contact $contact, $scenario = 'default')
+    public function __construct(Contact $contact, string $scenario = self::DEFAULT_SCENARIO)
     {
         $this->scenario = $scenario;
         $this->contacts = $this->extractContacts($contact);
@@ -67,7 +71,7 @@ class EmployeeForm
      * @param Contact $contact
      * @return array
      */
-    protected function extractContacts(Contact $contact)
+    protected function extractContacts(Contact $contact): array
     {
         $result = [];
 
@@ -84,7 +88,7 @@ class EmployeeForm
      * @param Contact $contact
      * @return Document|null
      */
-    protected function extractContract($contact)
+    protected function extractContract(Contact $contact): ?Document
     {
         foreach ($contact->documents as $document) {
             if ($document->type === 'contract') {
@@ -100,15 +104,12 @@ class EmployeeForm
     /**
      * @return Contact[]
      */
-    public function getContacts()
+    public function getContacts(): array
     {
         return $this->contacts;
     }
 
-    /**
-     * @return string
-     */
-    public function getName()
+    public function getName(): string
     {
         return $this->getPrimaryContact()->getName();
     }
@@ -133,11 +134,11 @@ class EmployeeForm
 
     /**
      * @param string $localization
-     * @return Contact|mixed|null
+     * @return Contact|null
      */
-    public function getContact($localization)
+    public function getContact(string $localization): ?Contact
     {
-        return isset($this->contacts[$localization]) ? $this->contacts[$localization] : null;
+        return $this->contacts[$localization] ?? null;
     }
 
     /**
@@ -147,35 +148,32 @@ class EmployeeForm
     public function load($data)
     {
         if ($contacts = $data['Contact']) {
-            $this->loadContacts($contacts, $data['pincode']);
+            $this->loadContacts($contacts, (string)$data['pincode']);
         }
 
         if ($contract = $data['Document']) {
             $this->loadContract($contract);
         }
 
+        $this->loadBankDetailsToLoadedContacts($data);
+
         return true;
     }
 
-    /**
-     * @return Document|null
-     */
-    public function getContract()
+    public function getContract(): ?Document
     {
         return $this->contract;
     }
 
     public function validate(): bool
     {
-        $contacts = $this->getContactsCollection();
-        if (!$contacts->validate()) {
-            $this->error = $contacts->getFirstError();
-        }
-
-        if ($this->getContract() !== null) {
-            if (!$this->getContract()->validate()) {
+        $collections = $this->getContactsCollections();
+        foreach ($collections as $collection) {
+            if (!$collection->validate()) {
+                $this->error = $collection->getFirstError();
+            }
+            if (($this->getContract() !== null) && !$this->getContract()->validate()) {
                 $errors = $this->getContract()->getFirstErrors();
-
                 $this->error = reset($errors);
             }
         }
@@ -185,12 +183,17 @@ class EmployeeForm
 
     public function save(): bool
     {
-        $collection = $this->getContactsCollection();
+        $collections = $this->getContactsCollections();
 
         try {
             $contractSaved = true;
-            $contactsSaved = $collection->save();
-
+            $contactsSaved = true;
+            foreach ($collections as $collection) {
+                if (!$collection->save()) {
+                    $contactsSaved = false;
+                    break;
+                }
+            }
             if ($this->getContract() !== null) {
                 $contractSaved = $this->getContract()->save();
             }
@@ -209,7 +212,7 @@ class EmployeeForm
      *
      * @return array
      */
-    public function getContractFields()
+    public function getContractFields(): array
     {
         return [
             'no' => Yii::t('hipanel:client', 'Number'),
@@ -234,10 +237,10 @@ class EmployeeForm
      * Sets $pincode to each model.
      *
      * @param array $data
-     * @param string $pincode
+     * @param string $pinCode
      * @return bool whether data was loaded successfully
      */
-    protected function loadContacts($data, $pincode)
+    protected function loadContacts(array $data, string $pinCode): bool
     {
         $success = true;
 
@@ -257,7 +260,7 @@ class EmployeeForm
                 continue;
             }
 
-            $contact->pincode = $pincode;
+            $contact->pincode = $pinCode;
         }
 
         return $success;
@@ -297,9 +300,11 @@ class EmployeeForm
         $model = clone $originalContact;
         $model->setAttributes([
             'id' => null,
+            'epp_id' => null,
             'type' => 'localized',
             'localization' => $language,
         ]);
+        $model->setScenario('create');
 
         return $model;
     }
@@ -320,13 +325,34 @@ class EmployeeForm
     /**
      * Creates collection of contacts.
      *
-     * @return Collection
+     * @return Collection[]
      */
-    protected function getContactsCollection()
+    protected function getContactsCollections(): array
     {
-        $collection = new Collection();
-        $collection->set($this->contacts);
+        $collections = [];
+        foreach ($this->contacts as $contact) {
+            $collection = new Collection();
+            $collection->set($contact);
+            $collections[] = $collection;
+        }
 
-        return $collection;
+        return $collections;
+    }
+
+    private function loadBankDetailsToLoadedContacts(array $data): void
+    {
+        $contacts = $this->contacts;
+        $bankDetails = $this->extractBankDetails($data);
+        foreach ($contacts as $contact) {
+            $contactBankDetails = array_filter(
+                $bankDetails,
+                static fn($model) => (string)$model['requisite_id'] === (string)$contact->id
+            );
+            if (!empty($contactBankDetails)) {
+                $contactBankDetails = array_values($contactBankDetails); // reset keys, if `no` attribute does not exist then order matters
+                $contact->setBankDetails = $contactBankDetails;
+            }
+        }
+        $this->contacts = $contacts;
     }
 }

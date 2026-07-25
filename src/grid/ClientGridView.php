@@ -11,6 +11,8 @@
 namespace hipanel\modules\client\grid;
 
 use DateTime;
+use hipanel\assets\TrumbowygAsset;
+use hipanel\base\Controller;
 use hipanel\grid\BoxedGridView;
 use hipanel\grid\DataColumn;
 use hipanel\grid\MainColumn;
@@ -26,8 +28,10 @@ use hipanel\modules\finance\controllers\BillController;
 use hipanel\modules\finance\grid\BalanceColumn;
 use hipanel\modules\finance\grid\CreditColumn;
 use hipanel\modules\finance\widgets\ColoredBalance;
+use hipanel\modules\kyc\grid\KycColumn;
 use hipanel\modules\stock\helpers\ProfitColumns;
 use hipanel\widgets\ArraySpoiler;
+use hipanel\widgets\SettingsModal;
 use hiqdev\yii2\menus\grid\MenuColumn;
 use Yii;
 use yii\helpers\Html;
@@ -35,6 +39,23 @@ use yii\helpers\Inflector;
 
 class ClientGridView extends BoxedGridView
 {
+
+    public function init()
+    {
+        parent::init();
+        /** @var Controller $ctx */
+        $ctx = $this->view->context;
+        if ($ctx && $this->shouldRegisterTrumbowyg($ctx)) {
+            TrumbowygAsset::register($this->view);
+        }
+    }
+
+    private function shouldRegisterTrumbowyg(Controller $ctx): bool
+    {
+        $representation = $ctx->indexPageUiOptionsModel->representation ?? null;
+
+        return $representation === null || $representation === 'common';
+    }
     /**
      * @return array
      */
@@ -51,7 +72,7 @@ class ClientGridView extends BoxedGridView
         $formatter = Yii::$app->formatter;
         $thisMonthDt = (new DateTime())->modify('first day of this month')->format('Y-m-d 00:00:00');
 
-        return array_merge(parent::columns(), $this->getProfitColumns(), [
+        $columns = array_merge(parent::columns(), $this->getProfitColumns(), [
             'id' => [
                 'class' => ClientColumn::class,
                 'attribute' => 'id',
@@ -117,16 +138,18 @@ class ClientGridView extends BoxedGridView
                 'class' => MainColumn::class,
                 'attribute' => 'login',
                 'filterAttribute' => 'login_like',
-                'note' => Yii::$app->user->can('manage') ? 'note' : null,
+                'note' => Yii::$app->user->can('client.set-note') ? 'note' : null,
                 'noteOptions' => [
                     'url' => Url::to('@client/set-note'),
                 ],
                 'footer' => '<b>' . Yii::t('hipanel:client', 'TOTAL on screen') . '</b>',
+                'exportedColumns' => ['tags', 'login'],
             ],
             'login_without_note' => [
                 'class' => MainColumn::class,
                 'attribute' => 'login',
                 'filterAttribute' => 'login_ilike',
+                'exportedColumns' => ['tags', 'login_without_note'],
             ],
             'note' => [
                 'class' => XEditableColumn::class,
@@ -138,7 +161,7 @@ class ClientGridView extends BoxedGridView
                         'data-type' => 'textarea',
                     ],
                 ],
-                'visible' => Yii::$app->user->can('support'),
+                'visible' => Yii::$app->user->can('client.set-note'),
             ],
             'name' => [
                 'filterAttribute' => 'name_ilike',
@@ -450,6 +473,7 @@ class ClientGridView extends BoxedGridView
                 'contentOptions' => [
                     'style' => 'white-space: nowrap;',
                 ],
+                'exportedColumns' => ['create_time', 'update_time'],
             ],
             'actions' => [
                 'class' => MenuColumn::class,
@@ -480,17 +504,22 @@ class ClientGridView extends BoxedGridView
                 },
             ],
             'description' => [
-                'class' => XEditableColumn::class,
-                'label' => Yii::t('hipanel', 'Description'),
-                'pluginOptions' => [
-                    'url' => Url::to('@client/set-description'),
-                ],
-                'widgetOptions' => [
-                    'linkOptions' => [
-                        'data-type' => 'textarea',
-                    ],
-                ],
+                'label' => Yii::t('hipanel:client', 'Description'),
+                'format' => 'raw',
                 'visible' => Yii::$app->user->can('client.set-description'),
+                'value' => function($model) {
+                    $modalStaticId = $model->id . '_description_modal_form';
+                    $widget = SettingsModal::widget([
+                        'id' => $modalStaticId,
+                        'model' => $model,
+                        'title' => $model->getAttributeLabel('description'),
+                        'toggleText' => $model->description,
+                        'headerOptions' => ['class' => 'label-info'],
+                        'scenario' => 'set-description',
+                    ]);
+
+                    return $widget;
+                },
             ],
             'last_deposit' => [
                 'label' => Yii::t('hipanel:client', 'Last deposit'),
@@ -604,5 +633,10 @@ class ClientGridView extends BoxedGridView
                 },
             ],
         ]);
+        if (Yii::getAlias("@kyc", false) !== false) {
+            $columns['kyc_status'] = ['class' => KycColumn::class];
+        }
+
+        return $columns;
     }
 }

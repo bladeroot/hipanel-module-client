@@ -40,6 +40,20 @@ $form = ActiveForm::begin([
 <div class="container-items">
     <?php foreach ($models as $i => $model) : ?>
         <div class="item">
+            <?php if (!$model->isNewRecord && (!$model->notMyself() || !$model->notMySeller())): ?>
+                <div class="box box-widget">
+                    <h3 class="box-title"><?= Yii::t('hipanel', '403 Error') ?></h3>
+                    <div class="box-body">
+                        <div class="row text-danger">
+                            <div class="col-md-12">
+                                <?= Yii::t('hipanel:client', 'You could not edit your account. Operation is not permitted') ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                <?php continue ?>
+            <?php endif ?>
             <div class="box box-widget">
                 <div class="box-header with-border">
                     <?php if ($model->isNewRecord) : ?>
@@ -97,7 +111,7 @@ $form = ActiveForm::begin([
                             </div>
                         <?php endif ?>
                     </div>
-                    <?php if (Yii::$app->user->can('purse.update')): ?>
+                    <?php if (Yii::$app->user->can('purse.update') && $model->isAccountOwner()): ?>
                         <div class="row">
                             <?= $form->field($model, "[{$i}]currencies")->widget(StaticCombo::class, [
                                 'multiple' => true,

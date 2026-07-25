@@ -27,11 +27,18 @@ use hipanel\actions\ViewAction;
 use hipanel\base\CrudController;
 use hipanel\filters\EasyAccessControl;
 use hipanel\helpers\Url;
+use hipanel\modules\client\actions\ChangePaymentStatusAction;
 use hipanel\modules\client\actions\DeleteClientsByLoginsAction;
+use hipanel\modules\client\forms\ChangePaymentStatusForm;
 use hipanel\modules\client\logic\IPConfirmer;
 use hipanel\modules\client\models\Client;
 use hipanel\modules\client\models\ClientSearch;
 use hipanel\modules\client\models\query\ClientQuery;
+use hipanel\modules\finance\widgets\FinanceDocumentsBox\PursesDocumentsDataSource;
+use hipanel\modules\ticket\models\Template;
+use hiqdev\hiart\Collection;
+use yii\web\Response;
+use yii\helpers\ArrayHelper;
 use RuntimeException;
 use Yii;
 use yii\base\Event;
@@ -49,7 +56,7 @@ class ClientController extends CrudController
             [
                 'class' => EasyAccessControl::class,
                 'actions' => [
-                    'update' => 'client.update',
+                    'update,merchant-payment' => 'client.update',
                     'delete' => 'client.delete',
                     'delete-by-logins' => 'client.delete',
                     'create' => $createUserPermissions,
@@ -94,10 +101,9 @@ class ClientController extends CrudController
                     /** @var ClientQuery $query */
                     $query = $action->getDataProvider()->query;
                     $representation = $action->controller->indexPageUiOptionsModel->representation;
-                    $query->addSelect(['contact'])->withContact();
 
                     if (in_array($representation, ['servers', 'documents'], true)) {
-                        $query->addSelect(['purses'])->withPurses();
+                        $query->withPurses();
                     }
 
                     switch ($representation) {
@@ -105,7 +111,7 @@ class ClientController extends CrudController
                             $query->addSelect(['accounts_count', Yii::getAlias('@server', false) ? 'servers_count' : null, 'targets_count']);
                             break;
                         case 'documents':
-                            $query->addSelect(['documents']);
+                            $query->withDocuments();
                             break;
                         case 'profit-report':
                             $query->withProfit();
@@ -119,7 +125,7 @@ class ClientController extends CrudController
                     return [
                         'types' => $this->getRefs('type,client', 'hipanel:client'),
                         'states' => $this->getRefs('state,client', 'hipanel:client'),
-                        'debt_label' => ClientSearch::getDebtLabels(),
+                        'debt_labels' => ClientSearch::getDebtLabels(),
                     ];
                 },
                 'filterStorageMap' => [
@@ -222,6 +228,7 @@ class ClientController extends CrudController
             ],
             'view' => [
                 'class' => ViewAction::class,
+                'data' => fn() => $this->getFinanceDocumentData(),
                 'on beforePerform' => function ($event) {
                     $action = $event->sender;
                     $action->getDataProvider()->query
@@ -231,7 +238,7 @@ class ClientController extends CrudController
                             'blocking',
                             Yii::$app->user->can('document.read') ? 'documents' : null,
                             'purses',
-                            Yii::$app->user->can('manage') ? 'show_deleted' : null,
+                            Yii::$app->user->can('client.read-deleted') ? 'show_deleted' : null,
                             Yii::getAlias('@domain', false) ? 'domains_count' : null,
                             Yii::getAlias('@ticket', false) ? 'tickets_count' : null,
                             Yii::getAlias('@server', false) ? 'servers_count' : null,
@@ -243,7 +250,8 @@ class ClientController extends CrudController
                         ->joinWith(['blocking'])
                         ->withContact()
                         ->withReferral()
-                        ->withPurses();
+                        ->withPurses()
+                        ->andFilterWhere(['with_roles' => true]);
                 },
             ],
             'validate-form' => [
@@ -315,6 +323,27 @@ class ClientController extends CrudController
                 'view' => '_set-attributes-form',
                 'success' => Yii::t('hipanel:client', 'Set additional information'),
             ],
+            'merchant-payment' => [
+                'findOptions' => ['with_roles' => true],
+                'class' => ChangePaymentStatusAction::class,
+                'view' => 'modals/merchant-payment',
+                'success' => Yii::t('hipanel:client', 'Merchant payment status has been changed'),
+                'scenario' => 'change-payment-status',
+                'collection' => [
+                    'class' => Collection::class,
+                    'model' => new ChangePaymentStatusForm(['scenario' => 'change-payment-status']),
+                    'scenario' => 'change-payment-status',
+                ],
+                'data' => function (Action $action, array $data) {
+                    $result = [];
+                    foreach ($data['models'] as $model) {
+                        $result['models'][] = new ChangePaymentStatusForm($model);
+                    }
+                    $result['model'] = reset($result['models']);
+
+                    return $result;
+                },
+            ],
             'pincode-settings' => [
                 'class' => SmartUpdateAction::class,
                 'view' => '_pincodeSettingsModal',
@@ -365,8 +394,42 @@ class ClientController extends CrudController
             ],
             'set-description' => [
                 'class' => SmartUpdateAction::class,
+                'view' => '_setDescriptionModal',
                 'success' => Yii::t('hipanel', 'Description was changed'),
                 'error' => Yii::t('hipanel', 'Failed to change description'),
+            ],
+            'create-notifications' => [
+                'class' => SmartPerformAction::class,
+                'success' => Yii::t('hipanel:client', 'Notification was created'),
+                'on beforeSave' => function(Event $event) {
+                    /** @var Action $action */
+                    $action = $event->sender;
+                    $template_id = Yii::$app->request->post('template_id');
+                    $topic = Yii::$app->request->post('topic');
+                    if (!empty($template_id)) {
+                        foreach ($action->collection->models as $model) {
+                            $model->setAttributes(array_filter([
+                                'template_id' => $template_id,
+                                'topic' => $topic,
+                            ]));
+                        }
+                    }
+                },
+            ],
+            'bulk-create-notification-modal' => [
+                'class' => PrepareBulkAction::class,
+                'view' => 'modals/bulk-notifications',
+                'on beforePerform' => static function (Event $event) {
+                    /** @var Action $action */
+                    $action = $event->sender;
+                    $action->getDataProvider()->query->addSelect(['simple-list']);
+                },
+                'data' => function($action, $data) {
+                    $templates = ArrayHelper::map(Template::find()->all(), 'id', 'name');
+                    return array_merge($data, [
+                        'templates' => $templates,
+                    ]);
+                },
             ],
             'my-test' => [
                 'class' => RenderAction::class,
@@ -417,5 +480,28 @@ class ClientController extends CrudController
         }
 
         return $this->redirect(['@client/view', 'id' => $id]);
+    }
+
+    public function getFinanceDocumentData(): array
+    {
+        return [
+           'documentTypes' => $this->getRefs('type,document', 'hipanel:document'),
+           'currencies' => $this->getRefs('type,currency'),
+        ];
+    }
+
+    public function actionGetFinanceDocumentState(string $client_id): Response
+    {
+        /** @var Client $client */
+        $client = Client::find()->where(['id' => $client_id])->withPurses(withDocuments: true)->withDocuments()->one();
+        $extra = $this->getFinanceDocumentData();
+        $state = new PursesDocumentsDataSource(
+            purses: $client->purses,
+            client: $client,
+            currencies: $extra['currencies'],
+            documentTypes: $extra['documentTypes'],
+        )->buildJsProps(true);
+
+        return $this->asJson($state);
     }
 }

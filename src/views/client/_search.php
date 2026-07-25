@@ -4,6 +4,7 @@ use hipanel\models\IndexPageUiOptions;
 use hipanel\modules\client\widgets\combo\RefererCombo;
 use hipanel\modules\client\widgets\combo\SellerCombo;
 use hipanel\widgets\AdvancedSearch;
+use hipanel\widgets\TagsInput;
 use hiqdev\combo\StaticCombo;
 use hiqdev\yii2\daterangepicker\DateRangePicker;
 use yii\helpers\Html;
@@ -15,6 +16,7 @@ use yii\web\View;
  * @var array $types
  * @var array $states
  * @var View $this
+ * @var array $debt_labels
  */
 
 ?>
@@ -23,7 +25,11 @@ use yii\web\View;
     <?= $search->field('login_email_like') ?>
 </div>
 
-<?php if (Yii::$app->user->can('support')) : ?>
+<div class="col-md-4 col-sm-6 col-xs-12">
+    <?= $search->field('login_email_in')->textarea() ?>
+</div>
+
+<?php if (Yii::$app->user->can('client.get-note')) : ?>
     <div class="col-md-4 col-sm-6 col-xs-12">
         <?= $search->field('note_ilike') ?>
     </div>
@@ -48,7 +54,7 @@ use yii\web\View;
     <?= $search->field('seller_id')->widget(SellerCombo::class) ?>
 </div>
 
-<?php if (Yii::$app->user->can('support')) : ?>
+<?php if (Yii::$app->user->can('client.read-referral')) : ?>
     <div class="col-md-4 col-sm-6 col-xs-12">
         <?= $search->field('referer_id')->widget(RefererCombo::class) ?>
     </div>
@@ -76,10 +82,16 @@ use yii\web\View;
     </div>
 <?php endif ?>
 
-<?php if (Yii::$app->user->can('support')) : ?>
+<?php if (Yii::$app->user->can('client.update')) : ?>
+    <div class="col-md-4 col-sm-6 col-xs-12">
+        <?= $search->field('tags')->widget(TagsInput::class) ?>
+    </div>
+<?php endif ?>
+
+<?php if (Yii::$app->user->can('client.read-financial-info')) : ?>
     <div class="col-md-4 col-sm-6 col-xs-12">
         <?= $search->field('debt_label')->widget(StaticCombo::class, [
-            'data' => $debt_label,
+            'data' => $debt_labels,
         ]) ?>
     </div>
 
@@ -102,6 +114,10 @@ use yii\web\View;
 
     <div class="col-md-4 col-sm-6 col-xs-12 checkbox">
         <?= $search->field('hide_internal')->checkbox() ?>
+    </div>
+
+    <div class="col-md-4 col-sm-6 col-xs-12 checkbox">
+        <?= $search->field('hide_prj')->checkbox() ?>
     </div>
 
     <?php if (Yii::$app->user->can('client.set-note')): ?>

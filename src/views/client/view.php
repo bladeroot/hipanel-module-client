@@ -12,17 +12,20 @@ use hipanel\modules\client\models\Client;
 
 /**
  * @var Client $model
+ * @var yii\web\View $this
+ * @var array $currencies
+ * @var array $documentTypes
  */
 
 $this->title = $model->login;
-$this->params['subtitle'] = sprintf('%s %s', Yii::t('hipanel:client', 'Client detailed information'), (Yii::$app->user->can('support') ? ' #' . $model->id : ''));
+$this->params['subtitle'] = sprintf('%s %s', Yii::t('hipanel:client', 'Client detailed information'), (Yii::$app->user->can('access-subclients') ? ' #' . $model->id : ''));
 if (Yii::$app->user->can('client.read')) {
     $this->params['breadcrumbs'][] = ['label' => Yii::t('hipanel', 'Clients'), 'url' => ['index']];
 }
 $this->params['breadcrumbs'][] = $this->title;
 
-if ($model->type === Client::TYPE_EMPLOYEE) {
-    echo $this->render('view/employee', ['model' => $model]);
+if ($model->isEmployee()) {
+    echo $this->render('view/employee', ['model' => $model, 'currencies' => $currencies, 'documentTypes' => $documentTypes]);
 } else {
-    echo $this->render('view/client', ['model' => $model]);
+    echo $this->render('view/client', ['model' => $model, 'currencies' => $currencies, 'documentTypes' => $documentTypes]);
 }

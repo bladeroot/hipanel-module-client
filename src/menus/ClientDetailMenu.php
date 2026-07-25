@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 /**
  * Client module for HiPanel
  *
@@ -11,9 +11,12 @@
 namespace hipanel\modules\client\menus;
 
 use hipanel\helpers\FontIcon;
+use hipanel\menus\AbstractDetailMenu;
 use hipanel\modules\client\models\Client;
+use hipanel\modules\client\Module;
 use hipanel\widgets\AjaxModal;
 use hipanel\widgets\AjaxModalWithTemplatedButton;
+use hipanel\widgets\AuditButton;
 use hipanel\widgets\BlockModalButton;
 use hipanel\widgets\ImpersonateButton;
 use hipanel\widgets\SettingsModal;
@@ -23,12 +26,9 @@ use yii\bootstrap\Html;
 use yii\bootstrap\Modal;
 use yii\helpers\Url;
 
-class ClientDetailMenu extends \hipanel\menus\AbstractDetailMenu
+class ClientDetailMenu extends AbstractDetailMenu
 {
-    /**
-     * @var Client
-     */
-    public $model;
+    public Client $model;
 
     public function items()
     {
@@ -37,7 +37,6 @@ class ClientDetailMenu extends \hipanel\menus\AbstractDetailMenu
         ])->items();
 
         $user = Yii::$app->user;
-        $totp_enabled = $this->model->totp_enabled;
 
         $items = array_merge([
             [
@@ -66,12 +65,7 @@ class ClientDetailMenu extends \hipanel\menus\AbstractDetailMenu
                 'encode' => false,
                 'visible' => $user->is($this->model->id),
             ],
-            [
-                'label' => $totp_enabled ? Yii::t('hipanel:client', 'Disable two factor authorization') : Yii::t('hipanel:client', 'Enable two factor authorization'),
-                'icon' => 'fa-lock',
-                'url' => Yii::getAlias('@HIAM_SITE', false) . Url::to(['/mfa/totp/' . ($totp_enabled ? 'disable' : 'enable'), 'back' => Url::to('', true)]),
-                'visible' => $user->is($this->model->id),
-            ],
+            $this->get2faLink($user->is($this->model->id)),
             [
                 'label' => SettingsModal::widget([
                     'model' => $this->model,
@@ -82,9 +76,9 @@ class ClientDetailMenu extends \hipanel\menus\AbstractDetailMenu
                 ]),
                 'encode' => false,
                 'visible' => $user->not($this->model->id)
-                                && $user->can('client.set-tmp-pwd')
-                                && !$this->model->isDeleted()
-                                && $this->model->type === 'client',
+                    && $user->can('client.set-tmp-pwd')
+                    && !$this->model->isDeleted()
+                    && $this->model->type === 'client',
             ],
             [
                 'label' => ImpersonateButton::widget(['model' => $this->model]),
@@ -142,7 +136,7 @@ class ClientDetailMenu extends \hipanel\menus\AbstractDetailMenu
                 'icon' => 'fa-edit fa-fw',
                 'url' => ['@client/update', 'id' => $this->model->id],
                 'encode' => false,
-                'visible' => $user->can('client.update') && !$this->model->isDeleted(),
+                'visible' => $user->can('client.update') && !$this->model->isDeleted() && $this->model->notMyself() && $this->model->notMySeller(),
             ],
             [
                 'label' => SettingsModal::widget([
@@ -237,22 +231,82 @@ class ClientDetailMenu extends \hipanel\menus\AbstractDetailMenu
             ] : [],
             [
                 'label' => AjaxModal::widget([
-                    'actionUrl' => ['@client/set-attributes', 'id'=> $this->model->id],
-                    'header' => Html::tag('h4', Yii::t('hipanel:client', 'Additional information'), ['class' => 'model-title']),
+                    'actionUrl' => ['@client/set-attributes', 'id' => $this->model->id],
+                    'header' => Html::tag('h4', Yii::t('hipanel:client', 'Additional information'), ['class' => 'modal-title']),
                     'scenario' => 'update',
                     'toggleButton' => [
                         'tag' => 'a',
-                        'label' => FontIcon::i('fa-edit fa-fw') . " " . Yii::t('hipanel:client', 'Set additional information'),
+                        'label' => FontIcon::i('fa-edit fa-fw') . Yii::t('hipanel:client', 'Set additional information'),
                         'class' => 'clickable',
                     ],
                 ]),
                 'encode' => false,
                 'visible' => $user->can('client.update'),
             ],
+            [
+                'label' => AjaxModal::widget([
+                    'actionUrl' => ['@client/merchant-payment', 'id' => $this->model->id],
+                    'header' => Html::tag('h4', Yii::t('hipanel:client', 'Merchant payment status'), ['class' => 'modal-title']),
+                    'size' => Modal::SIZE_SMALL,
+                    'scenario' => 'change-payment-status',
+                    'toggleButton' => [
+                        'tag' => 'a',
+                        'label' => implode('', [
+                            Html::tag('i', null, ['class' => 'fa fa-fw fa-credit-card-alt']),
+                            Yii::t('hipanel:client', 'Change merchant payment status'),
+                            in_array('deny:deposit', explode(',', $this->model->roles)) ?
+                                Html::tag('span', Yii::t('hipanel:client', 'Forbidden'), ['class' => 'badge bg-red pull-right']) :
+                                Html::tag('span', Yii::t('hipanel:client', 'Permitted'), ['class' => 'badge bg-green pull-right']),
+                        ]),
+                        'class' => 'clickable',
+                    ],
+                ]),
+                'encode' => false,
+                'visible' => $user->can('client.update') && Yii::getAlias('@domain', false),
+            ],
+            [
+                'label' => AuditButton::widget(['model' => $this->model]),
+                'encode' => false,
+            ],
+            [
+                'label' => Yii::t('hipanel:client', 'Documents'),
+                'icon' => 'fa-paperclip',
+                'url' => ['@contact/attach-documents', 'id' => $this->model->id],
+                'linkOptions' => [
+                    'target' => '_blank',
+                ],
+                'visible' => Yii::getAlias('@document', false) !== false && $user->can('document.read'),
+            ],
         ], $actions);
 
         unset($items['view']);
 
         return $items;
+    }
+
+    private function get2faLink(bool $isCurrenUserProfile): array
+    {
+        /** @var Module $module */
+        $module = Yii::$app->getModule('client');
+        $hiamSite = Yii::getAlias('@HIAM_SITE', false);
+        if (!$module->twoFactorAuth || !$hiamSite) {
+            return [];
+        }
+
+        $totpEnabled = $this->model->totp_enabled;
+
+        $action = $totpEnabled ? 'disable' : 'enable';
+        $label = $totpEnabled
+            ? Yii::t('hipanel:client', 'Disable two-factor authorization')
+            : Yii::t('hipanel:client', 'Enable two-factor authorization');
+
+        $url = implode('', [$hiamSite, Url::to(['/mfa/totp/' . $action, 'back' => Url::to('', true)])]);
+
+        return [
+            'label' => $label,
+            'icon' => 'fa-lock',
+            'url' => $url,
+            'visible' => $isCurrenUserProfile,
+        ];
     }
 }

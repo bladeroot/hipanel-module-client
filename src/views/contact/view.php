@@ -2,9 +2,11 @@
 
 use hipanel\modules\client\grid\ContactGridView;
 use hipanel\modules\client\menus\ContactDetailMenu;
+use hipanel\modules\client\models\Client;
 use hipanel\modules\client\models\Contact;
 use hipanel\modules\client\widgets\ForceVerificationBlock;
-use hipanel\modules\document\widgets\StackedDocumentsView;
+use hipanel\modules\finance\widgets\FinanceDocumentsBox;
+use hipanel\modules\finance\widgets\FinanceDocumentsBox\PartyDocumentsDataSource;
 use hipanel\widgets\Box;
 use hipanel\widgets\ClientSellerLink;
 use hiqdev\assets\flagiconcss\FlagIconCssAsset;
@@ -14,10 +16,11 @@ use yii\helpers\Inflector;
 
 /**
  * @var Contact $model
+ * @var Client $client
  */
 
 $this->title = Inflector::titleize($model->name, true);
-$this->params['subtitle'] = sprintf('%s %s', Yii::t('hipanel:client', 'Contact detailed information'), (Yii::$app->user->can('support') ? ' #' . $model->id : ''));
+$this->params['subtitle'] = sprintf('%s %s', Yii::t('hipanel:client', 'Contact detailed information'), (Yii::$app->user->can('access-subclients') ? ' #' . $model->id : ''));
 if (Yii::$app->user->can('contact.read')) {
     $this->params['breadcrumbs'][] = ['label' => Yii::t('hipanel:client', 'Contacts'), 'url' => ['index']];
 }
@@ -89,36 +92,6 @@ FlagIconCssAsset::register($this);
                         ]) ?>
                     <?php $box->endBody() ?>
                 <?php $box->end() ?>
-
-                <?php $box = Box::begin([
-                    'renderBody' => false,
-                    'collapsed' => empty($model->reg_data) && empty($model->vat_number) && empty($model->vat_rate),
-                    'collapsable' => true,
-                    'title' => Yii::t('hipanel:client', 'Registration data'),
-                ]) ?>
-                    <?php $box->beginBody() ?>
-                        <?= ContactGridView::detailView([
-                            'boxed'   => false,
-                            'model'   => $model,
-                            'columns' => ['reg_data', 'vat_rate', 'invoice_last_no'],
-                        ]) ?>
-                    <?php $box->endBody() ?>
-                <?php $box->end() ?>
-
-                <?php $box = Box::begin([
-                    'renderBody' => false,
-                    'collapsed' => empty($model->bank_details),
-                    'collapsable' => true,
-                    'title' => Yii::t('hipanel:client', 'Bank details'),
-                ]) ?>
-                    <?php $box->beginBody() ?>
-                        <?= ContactGridView::detailView([
-                            'boxed'   => false,
-                            'model'   => $model,
-                            'columns' => ['bank_account', 'bank_name', 'bank_address', 'bank_swift'],
-                        ]) ?>
-                    <?php $box->endBody() ?>
-                <?php $box->end() ?>
             </div>
             <div class="col-md-6">
                 <?php $box = Box::begin(['renderBody' => false]) ?>
@@ -130,29 +103,44 @@ FlagIconCssAsset::register($this);
                             'boxed'   => false,
                             'model'   => $model,
                             'columns' => [
-                                'first_name', 'last_name', 'organization',
+                                'first_name', 'last_name', 'organization_with_warning',
                                 'street', 'city', 'province', 'postal_code', 'country',
                             ],
                         ]) ?>
                     <?php $box->endBody() ?>
                 <?php $box->end() ?>
 
-                <?php if (Yii::getAlias('@document', false) !== false && Yii::$app->user->can('document.read')) : ?>
-                    <?php $box = Box::begin(['renderBody' => false]) ?>
-                        <?php $box->beginHeader() ?>
-                            <?= $box->renderTitle(Yii::t('hipanel:client', 'Documents')) ?>
-                            <?php $box->beginTools() ?>
-                                <?= Html::a(Yii::t('hipanel', 'Details'), ['@contact/attach-documents', 'id' => $model->id], ['class' => 'btn btn-default btn-xs']) ?>
-                                <?= Html::a(Yii::t('hipanel', 'Upload'), ['@contact/attach-documents', 'id' => $model->id], ['class' => 'btn btn-default btn-xs']) ?>
-                            <?php $box->endTools() ?>
-                        <?php $box->endHeader() ?>
-                        <?php $box->beginBody() ?>
-                            <?= StackedDocumentsView::widget([
-                                'models' => $model->documents,
-                            ]); ?>
-                        <?php $box->endBody() ?>
-                    <?php $box->end() ?>
-                <?php endif; ?>
+
+                <?php $box = Box::begin([
+                    'renderBody' => false,
+                    'collapsed' => empty($model->reg_data) && empty($model->vat_number) && empty($model->vat_rate),
+                    'collapsable' => true,
+                    'title' => Yii::t('hipanel:client', 'Registration data'),
+                ]) ?>
+                    <?php $box->beginBody() ?>
+                        <?= ContactGridView::detailView([
+                            'boxed'   => false,
+                            'model'   => $model,
+                            'columns' => ['reg_data', 'vat_rate', 'invoice_last_no', 'registration_number', 'tic'],
+                        ]) ?>
+                    <?php $box->endBody() ?>
+                <?php $box->end() ?>
+
+                <?php $box = Box::begin([
+                    'renderBody' => false,
+                    'collapsed' => empty($model->bank_details),
+                    'collapsable' => true,
+                    'title' => Yii::t('hipanel:client', 'Bank details'),
+                    'bodyOptions' => ['class' => 'no-padding'],
+                ]) ?>
+                    <?php $box->beginBody() ?>
+                        <?= ContactGridView::detailView([
+                            'boxed'   => false,
+                            'model'   => $model,
+                            'columns' => ['requisites'],
+                        ]) ?>
+                    <?php $box->endBody() ?>
+                <?php $box->end() ?>
 
                 <?php $box = Box::begin([
                     'renderBody' => false,
@@ -170,6 +158,22 @@ FlagIconCssAsset::register($this);
                         ]) ?>
                     <?php $box->endBody() ?>
                 <?php $box->end() ?>
+            </div>
+            <div class="col-md-12">
+                <?php if (Yii::getAlias('@document', false) !== false && Yii::$app->user->can('document.read')) : ?>
+                    <?php $box = Box::begin(['renderBody' => false]) ?>
+                        <?php $box->beginHeader() ?>
+                            <?= $box->renderTitle(Yii::t('hipanel:client', 'Documents')) ?>
+                            <?php $box->beginTools() ?>
+                                <?= Html::a(Yii::t('hipanel', 'Details'), ['@contact/attach-documents', 'id' => $model->id], ['class' => 'btn btn-default btn-xs']) ?>
+                                <?= Html::a(Yii::t('hipanel', 'Upload'), ['@contact/attach-documents', 'id' => $model->id], ['class' => 'btn btn-default btn-xs']) ?>
+                            <?php $box->endTools() ?>
+                            <?php $box->endHeader() ?>
+                            <?php $box->beginBody() ?>
+                                <?= FinanceDocumentsBox::widget(['dataSource' => new PartyDocumentsDataSource($model, $client)]) ?>
+                            <?php $box->endBody() ?>
+                    <?php $box->end() ?>
+                <?php endif ?>
             </div>
         </div>
     </div>

@@ -16,6 +16,7 @@ use hipanel\modules\client\menus\ContactActionsMenu;
 use hipanel\modules\client\models\Contact;
 use hipanel\modules\client\widgets\UnverifiedWidget;
 use hipanel\modules\document\widgets\StackedDocumentsView;
+use hipanel\modules\kyc\grid\KycColumn;
 use hipanel\widgets\VerificationMark;
 use hiqdev\yii2\menus\grid\MenuColumn;
 use Yii;
@@ -30,6 +31,7 @@ class ContactGridView extends BoxedGridView
                 'class' => MainColumn::class,
                 'filterAttribute' => 'name_like',
                 'extraAttribute' => 'organization',
+                'exportedColumns' => ['tags'],
             ],
             'name_with_verification' => [
                 'class' => MainColumn::class,
@@ -39,6 +41,22 @@ class ContactGridView extends BoxedGridView
                 'value' => function (Contact $model) {
                     return Html::encode($model->name) . VerificationMark::widget(['model' => $model->getVerification('name')]);
                 },
+            ],
+            'organization_with_warning' => [
+                'format' => 'raw',
+                'attribute' => 'organization',
+                'value' => function(Contact $model) {
+                    $result = $model->organization ?? '';
+                    if ($result || (Yii::$app->params['module.domain.contact.organization.notification'] ?? false) === false) {
+                        return $result;
+                    }
+
+                    return Html::tag('b', Yii::t('hipanel:client', 'If you provide an organization name, it will be considered the domain holder and may be published in RDDS with your consent.'), ['class' => 'text-warning']);
+                },
+            ],
+            'kyc_status' => [
+                'class' => KycColumn::class,
+                'attribute' => 'kyc.state',
             ],
             'name_link_with_verification' => [
                 'class' => MainColumn::class,
@@ -209,18 +227,7 @@ class ContactGridView extends BoxedGridView
                 },
             ],
             'requisites' => [
-                'format' => 'raw',
-                'value' => function ($model) {
-                    $res = implode("\n", array_filter([
-                        $model->organization,
-                        $model->renderAddress(),
-                        $model->vat_number,
-                        $model->invoice_last_no,
-                    ])) . "\n\n";
-                    $res .= $model->renderBankDetails();
-
-                    return nl2br(Html::encode($res));
-                },
+                'class' => RequisitesColumn::class,
             ],
         ]);
     }
